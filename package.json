@@ -6,21 +6,31 @@
     "markdown",
     "convert"
   ],
-  "author": "Jason Young - jason@ytechie.com - ytechie.com",
+  "author": "jrondorf",
+  "version": "1.0.0",
   "bugs": {
-    "url": "https://github.com/ytechie/wordpress-to-markdown/issues"
+    "url": "https://github.com/jrondorf/wordpress-to-markdown/issues"
+  },
+  "description": "WordPress to MarkDown Converter",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node convert.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ytechie/wordpress-to-markdown.git"
+    "url": "https://github.com/jrondorf/wordpress-to-markdown"
   },
-  "engines": {
-    "node": ">=0.8",
-    "npm": ">=1.2"
-  },
+  "license": "MIT",
+  "homepage": "https://github.com/jrondorf/wordpress-to-markdown#readme",
   "dependencies": {
-    "to-markdown": "~0.0.1",
-    "xml2js": "~0.2.8"
+    "he": "^1.2.0",
+    "js-yaml": "^3.13.1",
+    "minimist": "^1.2.0",
+    "moment": "^2.24.0",
+    "slugify": "^1.3.4",
+    "turndown": "^5.0.3",
+    "turndown-plugin-gfm": "^1.0.2",
+    "xml2js": "^0.4.19"
   },
   "main": "convert.js"
 }

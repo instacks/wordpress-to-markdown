@@ -27,12 +27,12 @@ This uses [xml2js](https://github.com/Leonidas-from-XIV/node-xml2js) to parse th
 Clone the repo and go into its directory to install dependencies:
 
 ```
-$ git clone https://github.com/ytechie/wordpress-to-markdown.git
+$ git clone https://github.com/jrondorf/wordpress-to-markdown.git
 $ cd wordpress-to-markdown/
-$ npm install xml2js to-markdown
+$ npm install
 ```
 
-Copy your Wordpress content export into the folder as `export.xml`. Then run the script
+Copy your Wordpress content export into the folder as `wp-export/export.xml`. Then run the script
 
 ```
 $ node convert.js

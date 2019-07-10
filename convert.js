@@ -1,172 +1,267 @@
-var xml2js = require('xml2js');
-var fs = require('fs');
-var util = require('util');
-var toMarkdown = require('to-markdown');
-var http = require('http');
+console.log('*******************************************')
+console.log('* WordPress to MarkDown Converter - Start *')
+console.log('*******************************************')
 
-processExport();
+//const http = require('https')
+const http = require('http')
+const fs = require('fs')
+const moment = require('moment')
+const slugify = require('slugify')
+// local turndown.cjs.js for white space bug fix
+const turndown = require('./turndown.cjs')
+const turndownPluginGfm = require('turndown-plugin-gfm')
+const xml2js = require('xml2js')
+const yaml = require('js-yaml')
 
-function processExport() {
-	var parser = new xml2js.Parser();
-	fs.readFile('export.xml', function(err, data) {
-		if(err) {
-			console.log('Error: ' + err);
-		}
+const parser = new xml2js.Parser()
 
-	    parser.parseString(data, function (err, result) {
-	    	if(err) {
-	    		console.log('Error parsing xml: ' + err);
-	    	}
-	    	console.log('Parsed XML');
-	        //console.log(util.inspect(result.rss.channel));
+const turndownService = new turndown({})
+turndownService.use(turndownPluginGfm.gfm)
 
-	        var posts = result.rss.channel[0].item;
-
-			
-			fs.mkdir('out', function() {
-		        for(var i = 0; i < posts.length; i++) {
-	        		processPost(posts[i]);
-		        	//console.log(util.inspect(posts[i]));
-		        }
-			});
-	    });
-	});
+var argv = require('minimist')(process.argv.slice(2));
+let exportFile
+if (argv.f) {
+    exportFile = argv.f
+} else {
+    exportFile = 'wp-export/export.xml'
+}
+if (!fs.existsSync(exportFile)) {
+    console.log('Export File not available')
+    process.exit(1)
 }
 
-function processPost(post) {
-	console.log('Processing Post');
+const imagePattern = new RegExp("(?:src=\"(.*?)\")", "gi")
+const exportFolderRoot = 'md-export/'
+const exportFolderAttachment = 'attachment/'
+const exportFolderPage = 'page/'
+const exportFolderPost = 'blog/'
+const exportFolders = {
+    'attachment': exportFolderAttachment,
+    'page': exportFolderPage,
+    'post': exportFolderPost
+}
 
-	var postTitle = post.title;
-	console.log('Post title: ' + postTitle);
-	var postDate = new Date(post.pubDate);
-	console.log('Post Date: ' + postDate);
-	var postData = post['content:encoded'][0];
-	console.log('Post length: ' + postData.length + ' bytes');
-	var slug = post['wp:post_name'];
-	console.log('Post slug: ' + slug);
+function processExport() {
+    fs.readFile(exportFile, function (err, data) {
+        if (err) {
+            console.log('Error: ' + err)
+        }
 
-	//Merge categories and tags into tags
-	var categories = [];
-	if (post.category != undefined) {
-		for(var i = 0; i < post.category.length; i++) {
-			var cat = post.category[i]['_'];
-			if(cat != "Uncategorized")
-				categories.push(cat);
-			//console.log('CATEGORY: ' + util.inspect(post.category[i]['_']));
-		}
-	}
+        parser.parseString(data, function (err, result) {
+            if (err) {
+                console.log('Error parsing xml: ' + err)
+            }
+            console.log('Parsed XML')
 
-	var fullPath = 'out/' + postDate.getFullYear() + '/' + getPaddedMonthNumber(postDate.getMonth() + 1) + '/' + slug;
+            let items = result.rss.channel[0].item
 
-	fs.mkdir('out/' + postDate.getFullYear(), function() {
-		fs.mkdir('out/' + postDate.getFullYear() + '/' + getPaddedMonthNumber(postDate.getMonth() + 1), function() {
-			fs.mkdir(fullPath, function() {
-				//Find all images
-				var patt = new RegExp("(?:src=\"(.*?)\")", "gi");
-				
-				var m;
-				var matches = [];
-				while((m = patt.exec(postData)) !== null) {
-					matches.push(m[1]);
-					//console.log("Found: " + m[1]);
-				}
+            if (!fs.existsSync(exportFolderRoot)) {
+                fs.mkdirSync(exportFolderRoot);
+            }
+            if (!fs.existsSync(exportFolderRoot + exportFolderAttachment)) {
+                fs.mkdirSync(exportFolderRoot + exportFolderAttachment);
+            }
+            if (!fs.existsSync(exportFolderRoot + exportFolderPage)) {
+                fs.mkdirSync(exportFolderRoot + exportFolderPage);
+            }
+            if (!fs.existsSync(exportFolderRoot + exportFolderPost)) {
+                fs.mkdirSync(exportFolderRoot + exportFolderPost);
+            }
 
+            for (let i = 0; i < items.length; i++) {
+                processItems(items[i])
+            }
 
-				if(matches != null && matches.length > 0) {
-					for(var i = 0; i < matches.length; i++) {
-						//console.log('Post image found: ' + matches[i])
+            /*
+             * TODO:
+             * - Filter for published posts
+             * - Add attachement URLs to header image
+             */
+            let highestId = 0
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].id > highestId) {
+                    highestId = items[i].id
+                }
+            }
 
-						var url = matches[i];
-						var urlParts = matches[i].split('/');
-						var imageName = urlParts[urlParts.length - 1];
+            let tempItems = new Array(highestId + 1)
 
-						var filePath = fullPath + '/' + imageName;
+            for (let i = 0; i < tempItems.length; i++) {
+                for (let j = 0; j < items.length; j++) {
+                    if (items[j].id === i) {
+                        tempItems[i] = items[j]
+                        continue
+                    }
+                }
+            }
 
-						downloadFile(url, filePath);
+            items = tempItems
 
-						//Make the image name local relative in the markdown
-						postData = postData.replace(url, imageName);
-						//console.log('Replacing ' + url + ' with ' + imageName);
-					}
-				}
+            for (let i = 0; i < items.length; i++) {
+                if (items[i] && items[i]['wp:post_type'][0] == 'post') {
+                    if (items[i]['wp:postmeta']) {
+                        for (let j = 0; j < items[i]['wp:postmeta'].length; j++){
+                            if (items[i]['wp:postmeta'][j]['wp:meta_key'][0] == '_thumbnail_id') {
+                                let thumbnailId = parseInt(items[i]['wp:postmeta'][j]['wp:meta_value'][0])
+                                items[i].headerData['header_image'] = {
+                                    'src' : items[thumbnailId].attachment_url,
+                                    'alt' : items[thumbnailId].title
+                                }
+                                items[i].headerData['header_image_details'] = true
+                                items[i].headerData['metadata_image'] = {
+                                    'src' : items[thumbnailId].attachment_url
+                                }
+                            }
+                        } 
+                    }
+                }
+            }
 
-				var markdown = toMarkdown.toMarkdown(postData);
+            for (let i = 0; i < items.length; i++) {
+                if (items[i] && (items[i]['wp:post_type'][0] == 'page' || items[i]['wp:post_type'][0]  == 'post')) {
+                    exportItems(items[i])
+                }
+            }
 
-				//Fix characters that markdown doesn't like
-				// smart single quotes and apostrophe
-    			markdown = markdown.replace(/[\u2018|\u2019|\u201A]/g, "\'");
-    			// smart double quotes
-    			markdown = markdown.replace(/&quot;/g, "\"");
-    			markdown = markdown.replace(/[\u201C|\u201D|\u201E]/g, "\"");
-				// ellipsis
-				markdown = markdown.replace(/\u2026/g, "...");
-				// dashes
-				markdown = markdown.replace(/[\u2013|\u2014]/g, "-");
-				// circumflex
-				markdown = markdown.replace(/\u02C6/g, "^");
-				// open angle bracket
-				markdown = markdown.replace(/\u2039/g, "<");
-				markdown = markdown.replace(/&lt;/g, "<");
-				// close angle bracket
-				markdown = markdown.replace(/\u203A/g, ">");
-				markdown = markdown.replace(/&gt;/g, ">");
-				// spaces
-				markdown = markdown.replace(/[\u02DC|\u00A0]/g, " ");
-				// ampersand
-				markdown = markdown.replace(/&amp;/g, "&");
+        })
+    })
+}
 
-				var header = "";
-				header += "---\n";
-				header += "layout: post\n";
-				header += "title: " + postTitle + "\n";
-				header += "date: " + postDate.getFullYear() + '-' + getPaddedMonthNumber(postDate.getMonth() + 1) + '-' + getPaddedDayNumber(postDate.getDate()) + "\n";
-				if(categories.length > 0)
-					header += "tags: " + JSON.stringify(categories) + '\n';
-				header += "---\n";
-				header += "\n";
+function processItems(post) {
+    post.headerData = {}
+    post.headerData.id = parseInt(post['wp:post_id'][0])
+    post.id = post.headerData.id
+    post.headerData.title = post.title[0]
+    post.title = post.headerData.title
+    console.log('Processing Item ' + post.id + ' ' + post.title);
 
-				fs.writeFile(fullPath + '/index.html.md', header + markdown, function(err) {
+    post.headerData.date = new Date(post.pubDate)
+    post.headerData.slug = post['wp:post_name'][0]
+    if (!post.headerData.slug) {
+        post.headerData.slug = slugify(post.headerData.title)
+    }
+    post.postData = post['content:encoded'][0]
+    post.headerData.length = post.postData.length + ' bytes'
+    post.headerData.status = post['wp:status'][0]
+    post.headerData.draft = post.headerData.status == 'draft' ? true : false
 
-				});
-			});
-		});		
-	});
+    post.fileNamePrefix = moment(post.headerData.date).format('YYYY-MM-DD') + '_' + post.headerData.id + '_'
+    post.fileName = post.fileNamePrefix + post.headerData.slug + '.md'
+
+    if (post.category) {
+        post.headerData.categories = []
+        for (let i = 0; i < post.category.length; i++) {
+            let category = post.category[i]['_']
+            if (category != "Uncategorized") {
+                post.headerData.categories.push(category)
+            }
+        }
+    }
+
+    //inline images
+    let m
+    let matches = []
+    while ((m = imagePattern.exec(post.postData)) !== null) {
+        matches.push(m[1])
+    }
+    if (matches != null && matches.length > 0) {
+        for (let i = 0; i < matches.length; i++) {
+            let url = matches[i]
+            let urlParts = matches[i].split('/')
+            let imageName = post.fileNamePrefix + urlParts[urlParts.length - 1]
+            let filePath = exportFolderRoot + exportFolderAttachment + imageName
+
+            downloadFile(url, filePath)
+
+            //Make the image name local relative in the markdown
+            post.postData = post.postData.replace(url, '/' + exportFolderRoot + exportFolderAttachment + imageName)
+        }
+    }
+
+    //Header images
+    if (post['wp:attachment_url']) {
+        let url = post['wp:attachment_url'][0];
+        let urlParts = url.split('/')
+        let imageName = post.fileNamePrefix + urlParts[urlParts.length - 1]
+        let filePath = exportFolderRoot + exportFolderAttachment + '/' + imageName
+
+        downloadFile(url, filePath)
+
+        //Make the image name local relative in the markdown
+        post.attachment_url = '/' + exportFolderRoot + exportFolderAttachment + imageName
+    }
+
+}
+
+function exportItems(post) {
+    console.log('Exporting Item ' + post.id + ' ' + post.title);
+
+    let markdown = turndownService.turndown(post.postData)
+
+    //Fix characters that markdown doesn't like
+    // smart single quotes and apostrophe
+    markdown = markdown.replace(/[\u2018|\u2019|\u201A]/g, "\'")
+    // smart double quotes
+    markdown = markdown.replace(/&quot/g, "\"")
+    markdown = markdown.replace(/[\u201C|\u201D|\u201E]/g, "\"")
+    // ellipsis
+    markdown = markdown.replace(/\u2026/g, "...")
+    // dashes
+    markdown = markdown.replace(/[\u2013|\u2014]/g, "-")
+    // circumflex
+    markdown = markdown.replace(/\u02C6/g, "^")
+    // open angle bracket
+    markdown = markdown.replace(/\u2039/g, "<")
+    markdown = markdown.replace(/&lt/g, "<")
+    // close angle bracket
+    markdown = markdown.replace(/\u203A/g, ">")
+    markdown = markdown.replace(/&gt/g, ">")
+    // spaces
+    markdown = markdown.replace(/[\u02DC|\u00A0]/g, " ")
+    // ampersand
+    markdown = markdown.replace(/&amp/g, "&")
+
+    let header = ""
+    header += "---\n"
+    header += yaml.safeDump(post.headerData)
+    //if (categories.length > 0)
+    //	header += "tags: " + JSON.stringify(categories) + '\n'
+    // if (categories.length > 0) {
+    //     header += "tags: " + '\n'
+    //     for (let i = 0; i < categories.length; i++) {
+    //         header += "  - " + categories[i] + '\n'
+    //     }
+    // }
+
+    header += "---\n"
+
+    fs.writeFile(exportFolderRoot + exportFolders[post['wp:post_type'][0]] + post.fileName, header + markdown, function (err) {})
 }
 
 function downloadFile(url, path) {
-	 //console.log("Attempt downloading " + url + " to " + path + ' ' + url.indexOf("https:") );
-	if (url.indexOf("https:")  == -1) {
-		if (url.indexOf(".jpg") >=0 || url.indexOf(".png") >=0 || url.indexOf(".png") >=0) {
-			var file = fs.createWriteStream(path).on('open', function() {
-				var request = http.get(url, function(response) {
-				console.log("Response code: " + response.statusCode);
-				response.pipe(file);
-			}).on('error', function(err) {
-				console.log('error downloading url: ' + url + ' to ' + path);
-		});
-		}).on('error', function(err) {
-				console.log('error downloading url2: ' + url + ' to ' + path);
-
-		});
-	}
-	else {
-	  console.log ('passing on: ' + url + ' ' + url.indexOf('https:')); 
-	}
-	}
-	else {
-	  console.log ('passing on: ' + url + ' ' + url.indexOf('https:')); 
-	}
-}
-function getPaddedMonthNumber(month) {
-	if(month < 10)
-		return "0" + month;
-	else
-		return month;
+    let urlLowerCase = url.toLowerCase()
+    if (urlLowerCase.indexOf(".jpg") >= 0 || urlLowerCase.indexOf(".jpeg") >= 0 || urlLowerCase.indexOf(".png") >= 0 || urlLowerCase.indexOf(".gif") >= 0) {
+        let file = fs.createWriteStream(path).on('open', function () {
+            let request = http.get(url, function (response) {
+                response.pipe(file)
+            }).on('error', function (err) {
+                console.log('error downloading url: ' + url + ' to ' + path)
+            })
+        }).on('error', function (err) {
+            console.log('error downloading url2: ' + url + ' to ' + path)
+        })
+    } else {
+        console.log('passing on: ' + url)
+    }
 }
 
-function getPaddedDayNumber(day) {
-	if(day < 10)
-		return "0" + day;
-	else
-		return day;
-}
+processExport()
+
+// Old convert.js stop
+
+//let markdown = turndownService.turndown('<strong>Hello world!</strong>')
+//console.log(markdown)
+
+// console.log('*******************************************')
+// console.log('* WordPress to MarkDown Converter - Stop  *')
+// console.log('*******************************************')
