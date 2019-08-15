@@ -23,7 +23,7 @@ let exportFile
 if (argv.f) {
     exportFile = argv.f
 } else {
-    exportFile = 'export.xml'
+    exportFile = 'wp-export/export.xml'
 }
 if (!fs.existsSync(exportFile)) {
     console.log('Export File not available')
