@@ -4,30 +4,17 @@ This script uses the standard exported XML file from WordPress, and creates a fo
 
 Instructions for exporting your information from WordPress [can be found here](http://en.support.wordpress.com/export/).
 
-The folder structure was designed after my blog. I like the structure because it groups the files for the post with the post itself. If you want a different format, you'll need to modify the script.
-
-	/2013/11/this-is-a-post/index.html.md
-	/2013/11/this-is-a-post/image-for-the-post.jpg
-
-### Works on my box
-
-**This is highly experimental at best. It was developed for my own use to do a one time conversion from WordPress to markdown for a static generator such as [DocPad](https://github.com/bevry/docpad). It is designed to be used one time and then throw away.**
-
-### Technical Details
-
-This uses [xml2js](https://github.com/Leonidas-from-XIV/node-xml2js) to parse the XML easily, and then uses [to-markdown](https://github.com/domchristie/to-markdown) to convert the HTML post content into Markdown.
-
-### Requirements
+## Requirements
 
 * You must have Node.js installed and available in the folder you wish to run the script from.
 * The folder the script is is *must* contain a WordPress export file called "export.xml". The file name is hard-coded.
 
-### Usage
+## Usage
 
 Clone the repo and go into its directory to install dependencies:
 
 ```
-$ git clone https://github.com/jrondorf/wordpress-to-markdown.git
+$ git clone https://github.com/instacks/wordpress-to-markdown.git
 $ cd wordpress-to-markdown/
 $ npm install
 ```
@@ -38,7 +25,21 @@ Copy your Wordpress content export into the folder as `wp-export/export.xml`. Th
 $ node convert.js
 ```
 
-### License
+or
+
+```
+$ npm start
+```
+
+## Export
+
+The content will be exported into a folder `poster-content` with additional subfolders
+
+- `attachment` for downloaded images
+- `page` for the pages
+- `blog` for the posts
+
+## License
 
 The MIT License (MIT)
 
@@ -61,4 +62,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
