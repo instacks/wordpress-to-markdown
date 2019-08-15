@@ -2,8 +2,8 @@ console.log('*******************************************')
 console.log('* WordPress to MarkDown Converter - Start *')
 console.log('*******************************************')
 
-//const http = require('https')
-const http = require('http')
+const http = require('https')
+//const http = require('http')
 const fs = require('fs')
 const moment = require('moment')
 const slugify = require('slugify')
@@ -23,7 +23,7 @@ let exportFile
 if (argv.f) {
     exportFile = argv.f
 } else {
-    exportFile = 'wp-export/export.xml'
+    exportFile = 'export.xml'
 }
 if (!fs.existsSync(exportFile)) {
     console.log('Export File not available')
@@ -31,7 +31,7 @@ if (!fs.existsSync(exportFile)) {
 }
 
 const imagePattern = new RegExp("(?:src=\"(.*?)\")", "gi")
-const exportFolderRoot = 'md-export/'
+const exportFolderRoot = 'poster-content/'
 const exportFolderAttachment = 'attachment/'
 const exportFolderPage = 'page/'
 const exportFolderPost = 'blog/'
@@ -39,6 +39,10 @@ const exportFolders = {
     'attachment': exportFolderAttachment,
     'page': exportFolderPage,
     'post': exportFolderPost
+}
+
+const sleep = (milliseconds) => {
+  return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
 function processExport() {
@@ -242,16 +246,19 @@ function downloadFile(url, path) {
     let urlLowerCase = url.toLowerCase()
     if (urlLowerCase.indexOf(".jpg") >= 0 || urlLowerCase.indexOf(".jpeg") >= 0 || urlLowerCase.indexOf(".png") >= 0 || urlLowerCase.indexOf(".gif") >= 0) {
         let file = fs.createWriteStream(path).on('open', function () {
-            let request = http.get(url, function (response) {
-                response.pipe(file)
-            }).on('error', function (err) {
-                console.log('error downloading url: ' + url + ' to ' + path)
+            console.log('Downloading url: ' + url + ' to ' + path)
+            sleep(1000).then(() => {
+                let request = http.get(url, function (response) {
+                    response.pipe(file)
+                }).on('error', function (err) {
+                    console.log('Error downloading url: ' + url + ' to ' + path)
+                })
             })
         }).on('error', function (err) {
-            console.log('error downloading url2: ' + url + ' to ' + path)
+            console.log('Error downloading url: ' + url + ' to ' + path)
         })
     } else {
-        console.log('passing on: ' + url)
+        console.log('Passing on: ' + url)
     }
 }
 
