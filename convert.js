@@ -23,7 +23,7 @@ let exportFile
 if (argv.f) {
     exportFile = argv.f
 } else {
-    exportFile = 'wp-export/export.xml'
+    exportFile = 'export.xml'
 }
 if (!fs.existsSync(exportFile)) {
     console.log('Export File not available')
@@ -31,15 +31,7 @@ if (!fs.existsSync(exportFile)) {
 }
 
 const imagePattern = new RegExp("(?:src=\"(.*?)\")", "gi")
-const exportFolderRoot = 'poster-content/'
-const exportFolderAttachment = 'attachment/'
-const exportFolderPage = 'page/'
-const exportFolderPost = 'blog/'
-const exportFolders = {
-    'attachment': exportFolderAttachment,
-    'page': exportFolderPage,
-    'post': exportFolderPost
-}
+const exportFolderRoot = 'wordpress/'
 
 const sleep = (milliseconds) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
@@ -62,14 +54,14 @@ function processExport() {
             if (!fs.existsSync(exportFolderRoot)) {
                 fs.mkdirSync(exportFolderRoot);
             }
-            if (!fs.existsSync(exportFolderRoot + exportFolderAttachment)) {
-                fs.mkdirSync(exportFolderRoot + exportFolderAttachment);
+            if (!fs.existsSync(exportFolderRoot + 'page/')) {
+                fs.mkdirSync(exportFolderRoot + 'page/');
             }
-            if (!fs.existsSync(exportFolderRoot + exportFolderPage)) {
-                fs.mkdirSync(exportFolderRoot + exportFolderPage);
+            if (!fs.existsSync(exportFolderRoot + 'post/')) {
+                fs.mkdirSync(exportFolderRoot + 'post/');
             }
-            if (!fs.existsSync(exportFolderRoot + exportFolderPost)) {
-                fs.mkdirSync(exportFolderRoot + exportFolderPost);
+            if (!fs.existsSync(exportFolderRoot + 'post/' + 'media/')) {
+                fs.mkdirSync(exportFolderRoot + 'post/' + 'media/');
             }
 
             for (let i = 0; i < items.length; i++) {
@@ -173,12 +165,15 @@ function processItems(post) {
             let url = matches[i]
             let urlParts = matches[i].split('/')
             let imageName = post.fileNamePrefix + urlParts[urlParts.length - 1]
-            let filePath = exportFolderRoot + exportFolderAttachment + imageName
+            let filePath = exportFolderRoot + 'post/' + 'media/' + imageName
 
             downloadFile(url, filePath)
 
             //Make the image name local relative in the markdown
-            post.postData = post.postData.replace(url, '/' + exportFolderRoot + exportFolderAttachment + imageName)
+            //post.postData = post.postData.replace(url, 'media/' + imageName)
+            let regex = new RegExp(url, 'g')
+            post.postData = post.postData.replace(regex, 'media/' + imageName)
+            //var res = str.replace(/blue/g, "red");
         }
     }
 
@@ -187,12 +182,12 @@ function processItems(post) {
         let url = post['wp:attachment_url'][0];
         let urlParts = url.split('/')
         let imageName = post.fileNamePrefix + urlParts[urlParts.length - 1]
-        let filePath = exportFolderRoot + exportFolderAttachment + '/' + imageName
+        let filePath = exportFolderRoot + 'post/' + 'media/' + imageName
 
         downloadFile(url, filePath)
 
         //Make the image name local relative in the markdown
-        post.attachment_url = '/' + exportFolderRoot + exportFolderAttachment + imageName
+        post.attachment_url = 'media/' + imageName
     }
 
 }
@@ -239,10 +234,13 @@ function exportItems(post) {
 
     header += "---\n"
 
-    fs.writeFile(exportFolderRoot + exportFolders[post['wp:post_type'][0]] + post.fileName, header + markdown, function (err) {})
+    fs.writeFile(exportFolderRoot + post['wp:post_type'][0] + '/' + post.fileName, header + markdown, function (err) {})
 }
 
 function downloadFile(url, path) {
+    if (path.indexOf("?") >= 0) {
+        path = path.substring(0, path.indexOf("?"))
+    }
     let urlLowerCase = url.toLowerCase()
     if (urlLowerCase.indexOf(".jpg") >= 0 || urlLowerCase.indexOf(".jpeg") >= 0 || urlLowerCase.indexOf(".png") >= 0 || urlLowerCase.indexOf(".gif") >= 0) {
         let file = fs.createWriteStream(path).on('open', function () {
